@@ -455,6 +455,48 @@ def directory_size(path: Path) -> int:
     return sum(file.stat().st_size for file in path.rglob("*") if file.is_file())
 
 
+def validate_dashboard_configuration(args: argparse.Namespace) -> None:
+    if getattr(args, "skip_dashboard", False):
+        return
+    if getattr(args, "dashboard_max_nodes", 500) < 1:
+        raise ValueError("dashboard-max-nodes must be at least 1")
+    template_path = Path(__file__).with_name("graph_dashboard_template.html")
+    if not template_path.is_file():
+        raise FileNotFoundError(f"Dashboard template not found: {template_path}")
+    try:
+        import networkx  # noqa: F401
+        from plotly.offline import get_plotlyjs  # noqa: F401
+    except ImportError as exc:
+        raise RuntimeError(
+            "Install networkx and plotly to generate the graph dashboard"
+        ) from exc
+
+
+def generate_build_dashboard(
+    bundle_dir: Path,
+    args: argparse.Namespace,
+    accepted_relations: int,
+) -> bool:
+    if getattr(args, "skip_dashboard", False):
+        return False
+    if not accepted_relations:
+        print(
+            "Dashboard skipped because the build produced no grounded relationships.",
+            flush=True,
+        )
+        return False
+    visualize_bundle(
+        argparse.Namespace(
+            bundle=bundle_dir,
+            output=bundle_dir / "graph_dashboard.html",
+            entity=None,
+            depth=2,
+            max_nodes=getattr(args, "dashboard_max_nodes", 500),
+        )
+    )
+    return True
+
+
 def build_bundle(args: argparse.Namespace) -> None:
     input_dir = args.input.resolve()
     output_dir = args.output.resolve()
@@ -466,6 +508,7 @@ def build_bundle(args: argparse.Namespace) -> None:
         )
 
     chunks = load_chunks(input_dir, args.chunk_chars, args.overlap_chars)
+    validate_dashboard_configuration(args)
     extractor = AzureGraphExtractor()
     output_dir.parent.mkdir(parents=True, exist_ok=True)
 
@@ -541,10 +584,14 @@ def build_bundle(args: argparse.Namespace) -> None:
             "embedding_dimensions": int(embeddings.shape[1]),
             "embedding_dtype": "float16",
             "azure_used_at_query_time": False,
+            "dashboard_generated": bool(
+                accepted and not getattr(args, "skip_dashboard", False)
+            ),
         }
         (temp_dir / "manifest.json").write_text(
             json.dumps(manifest, indent=2), encoding="utf-8"
         )
+        generate_build_dashboard(temp_dir, args, accepted)
         shutil.move(str(temp_dir), str(output_dir))
 
     size_mb = directory_size(output_dir) / (1024 * 1024)
@@ -828,7 +875,7 @@ def select_visual_subgraph(
     relation_rows = list(
         connection.execute(
             f"""
-            SELECT r.id, r.source_id, r.target_id, r.predicate,
+            SELECT r.id, r.source_id, r.target_id, r.predicate, r.chunk_id,
                    r.evidence_quote, s.name AS subject, t.name AS object,
                    c.source, c.page
             FROM relations r
@@ -844,163 +891,220 @@ def select_visual_subgraph(
     return entity_rows, relation_rows
 
 
-def visualize_bundle(args: argparse.Namespace) -> None:
+def detect_visual_communities(
+    entities: list[sqlite3.Row], relations: list[sqlite3.Row]
+) -> tuple[dict[str, int], object]:
     try:
         import networkx as nx
-        import plotly.graph_objects as go
     except ImportError as exc:
-        raise RuntimeError(
-            "Install networkx and plotly to generate the graph visualization"
-        ) from exc
+        raise RuntimeError("Install networkx to detect graph communities") from exc
 
+    graph = nx.Graph()
+    graph.add_nodes_from(entity["id"] for entity in entities)
+    for relation in relations:
+        source_id = relation["source_id"]
+        target_id = relation["target_id"]
+        if graph.has_edge(source_id, target_id):
+            graph[source_id][target_id]["weight"] += 1
+        else:
+            graph.add_edge(source_id, target_id, weight=1)
+
+    if graph.number_of_edges():
+        groups = nx.community.louvain_communities(graph, weight="weight", seed=42)
+    else:
+        groups = [{entity_id} for entity_id in graph.nodes]
+    groups = sorted(groups, key=lambda group: (-len(group), min(group)))
+
+    community_by_entity: dict[str, int] = {}
+    for community_id, group in enumerate(groups, start=1):
+        for entity_id in group:
+            community_by_entity[entity_id] = community_id
+    return community_by_entity, graph
+
+
+def build_visual_payload(
+    entities: list[sqlite3.Row], relations: list[sqlite3.Row]
+) -> dict:
+    community_by_entity, graph = detect_visual_communities(entities, relations)
+    try:
+        import networkx as nx
+    except ImportError as exc:
+        raise RuntimeError("Install networkx to lay out the graph") from exc
+
+    if graph.number_of_nodes() == 1:
+        only_id = next(iter(graph.nodes))
+        positions = {only_id: np.asarray([0.0, 0.0])}
+    else:
+        positions = nx.spring_layout(
+            graph,
+            seed=42,
+            iterations=200,
+            weight="weight",
+            k=max(0.12, 1.8 / np.sqrt(graph.number_of_nodes())),
+        )
+
+    relation_count = {entity["id"]: 0 for entity in entities}
+    incoming_count = {entity["id"]: 0 for entity in entities}
+    outgoing_count = {entity["id"]: 0 for entity in entities}
+    for relation in relations:
+        relation_count[relation["source_id"]] += 1
+        relation_count[relation["target_id"]] += 1
+        outgoing_count[relation["source_id"]] += 1
+        incoming_count[relation["target_id"]] += 1
+
+    nodes = []
+    entity_name_by_id = {}
+    entity_type_by_id = {}
+    for entity in entities:
+        entity_id = entity["id"]
+        entity_name_by_id[entity_id] = entity["name"]
+        entity_type_by_id[entity_id] = entity["type"]
+        nodes.append(
+            {
+                "id": entity_id,
+                "name": entity["name"],
+                "type": entity["type"],
+                "community": community_by_entity[entity_id],
+                "degree": relation_count[entity_id],
+                "incoming": incoming_count[entity_id],
+                "outgoing": outgoing_count[entity_id],
+                "x": round(float(positions[entity_id][0]), 6),
+                "y": round(float(positions[entity_id][1]), 6),
+            }
+        )
+
+    relation_items = []
+    edge_groups: dict[tuple[str, str], dict] = {}
+    for relation in relations:
+        source_id = relation["source_id"]
+        target_id = relation["target_id"]
+        relation_items.append(
+            {
+                "id": relation["id"],
+                "source_id": source_id,
+                "target_id": target_id,
+                "subject": relation["subject"],
+                "predicate": relation["predicate"],
+                "object": relation["object"],
+                "evidence": relation["evidence_quote"],
+                "source": relation["source"],
+                "page": relation["page"],
+                "chunk_id": relation["chunk_id"],
+                "cross_community": (
+                    community_by_entity[source_id] != community_by_entity[target_id]
+                ),
+            }
+        )
+        pair = tuple(sorted((source_id, target_id)))
+        if pair not in edge_groups:
+            edge_groups[pair] = {
+                "id": stable_id("visual-edge", *pair),
+                "source_id": pair[0],
+                "target_id": pair[1],
+                "relation_ids": [],
+            }
+        edge_groups[pair]["relation_ids"].append(relation["id"])
+
+    communities = []
+    for community_id in sorted(set(community_by_entity.values())):
+        member_ids = {
+            entity_id
+            for entity_id, assigned_id in community_by_entity.items()
+            if assigned_id == community_id
+        }
+        incident_relations = [
+            relation
+            for relation in relation_items
+            if relation["source_id"] in member_ids
+            or relation["target_id"] in member_ids
+        ]
+        top_ids = sorted(
+            member_ids,
+            key=lambda entity_id: (
+                -relation_count[entity_id],
+                entity_name_by_id[entity_id].casefold(),
+            ),
+        )[:3]
+        communities.append(
+            {
+                "id": community_id,
+                "label": " · ".join(entity_name_by_id[entity_id] for entity_id in top_ids),
+                "entity_count": len(member_ids),
+                "relationship_count": len(incident_relations),
+                "top_entities": [
+                    entity_name_by_id[entity_id] for entity_id in top_ids
+                ],
+                "types": sorted(
+                    {entity_type_by_id[entity_id] for entity_id in member_ids}
+                ),
+                "sources": sorted(
+                    {relation["source"] for relation in incident_relations}
+                ),
+            }
+        )
+
+    return {
+        "nodes": nodes,
+        "relations": relation_items,
+        "edge_groups": list(edge_groups.values()),
+        "communities": communities,
+        "filters": {
+            "entity_types": sorted({node["type"] for node in nodes}),
+            "predicates": sorted(
+                {relation["predicate"] for relation in relation_items}
+            ),
+            "sources": sorted({relation["source"] for relation in relation_items}),
+        },
+    }
+
+
+def render_visual_dashboard(payload: dict, title: str) -> str:
+    try:
+        from plotly.offline import get_plotlyjs
+    except ImportError as exc:
+        raise RuntimeError("Install plotly to generate the graph dashboard") from exc
+
+    template_path = Path(__file__).with_name("graph_dashboard_template.html")
+    if not template_path.is_file():
+        raise FileNotFoundError(f"Dashboard template not found: {template_path}")
+    template = template_path.read_text(encoding="utf-8")
+    graph_json = json.dumps(payload, separators=(",", ":")).replace("</", "<\\/")
+    return (
+        template.replace("__DASHBOARD_TITLE__", html.escape(title))
+        .replace("__PLOTLY_JAVASCRIPT__", get_plotlyjs())
+        .replace("__GRAPH_DATA__", graph_json)
+    )
+
+
+def visualize_bundle(args: argparse.Namespace) -> None:
     bundle = args.bundle.resolve()
     output = args.output.resolve()
     if output.exists():
         raise FileExistsError(f"Visualization already exists: {output}")
 
     connection = sqlite3.connect(bundle / "graph.sqlite3")
-    entities, relations = select_visual_subgraph(
-        connection,
-        entity_query=args.entity,
-        depth=args.depth,
-        max_nodes=args.max_nodes,
-    )
-    connection.close()
-
-    graph = nx.MultiDiGraph()
-    for entity in entities:
-        graph.add_node(entity["id"], name=entity["name"], type=entity["type"])
-    for relation in relations:
-        graph.add_edge(
-            relation["source_id"],
-            relation["target_id"],
-            key=relation["id"],
-            predicate=relation["predicate"],
+    try:
+        entities, relations = select_visual_subgraph(
+            connection,
+            entity_query=args.entity,
+            depth=args.depth,
+            max_nodes=args.max_nodes,
         )
-
-    positions = nx.spring_layout(graph, seed=42, iterations=100)
-    edge_x: list[float | None] = []
-    edge_y: list[float | None] = []
-    midpoint_x: list[float] = []
-    midpoint_y: list[float] = []
-    edge_hover: list[str] = []
-    for relation in relations:
-        x0, y0 = positions[relation["source_id"]]
-        x1, y1 = positions[relation["target_id"]]
-        edge_x.extend((x0, x1, None))
-        edge_y.extend((y0, y1, None))
-        midpoint_x.append((x0 + x1) / 2)
-        midpoint_y.append((y0 + y1) / 2)
-        location = relation["source"]
-        if relation["page"]:
-            location += f", page {relation['page']}"
-        edge_hover.append(
-            "<b>"
-            + html.escape(relation["subject"])
-            + " —"
-            + html.escape(relation["predicate"])
-            + "→ "
-            + html.escape(relation["object"])
-            + "</b><br>Evidence: "
-            + html.escape(relation["evidence_quote"])
-            + "<br>Source: "
-            + html.escape(location)
-        )
-
-    figure = go.Figure()
-    figure.add_trace(
-        go.Scatter(
-            x=edge_x,
-            y=edge_y,
-            mode="lines",
-            line={"width": 0.8, "color": "#94a3b8"},
-            hoverinfo="skip",
-            showlegend=False,
-        )
-    )
-    figure.add_trace(
-        go.Scatter(
-            x=midpoint_x,
-            y=midpoint_y,
-            mode="markers",
-            marker={"size": 9, "color": "rgba(0,0,0,0)"},
-            text=edge_hover,
-            hovertemplate="%{text}<extra></extra>",
-            showlegend=False,
-        )
-    )
-
-    palette = [
-        "#2563eb",
-        "#dc2626",
-        "#16a34a",
-        "#9333ea",
-        "#ea580c",
-        "#0891b2",
-        "#4f46e5",
-        "#65a30d",
-        "#db2777",
-        "#0f766e",
-        "#7c3aed",
-        "#ca8a04",
-        "#475569",
-        "#64748b",
-    ]
-    entity_types = sorted({entity["type"] for entity in entities})
-    colors = {
-        entity_type: palette[index % len(palette)]
-        for index, entity_type in enumerate(entity_types)
-    }
-    for entity_type in entity_types:
-        type_entities = [entity for entity in entities if entity["type"] == entity_type]
-        figure.add_trace(
-            go.Scatter(
-                x=[positions[entity["id"]][0] for entity in type_entities],
-                y=[positions[entity["id"]][1] for entity in type_entities],
-                mode="markers+text",
-                text=[entity["name"] for entity in type_entities],
-                textposition="top center",
-                textfont={"size": 9},
-                marker={
-                    "size": 15,
-                    "color": colors[entity_type],
-                    "line": {"width": 1, "color": "white"},
-                },
-                customdata=[
-                    [
-                        entity["name"],
-                        entity["type"],
-                        graph.degree(entity["id"]),
-                    ]
-                    for entity in type_entities
-                ],
-                hovertemplate=(
-                    "<b>%{customdata[0]}</b><br>"
-                    "Type: %{customdata[1]}<br>"
-                    "Connections: %{customdata[2]}<extra></extra>"
-                ),
-                name=entity_type,
-            )
-        )
+    finally:
+        connection.close()
 
     focus = f' near “{args.entity}”' if args.entity else " by highest connectivity"
-    figure.update_layout(
-        title=(
-            f"IFS knowledge graph{focus} — "
-            f"{len(entities)} entities, {len(relations)} relationships"
-        ),
-        template="plotly_white",
-        hovermode="closest",
-        margin={"l": 20, "r": 20, "t": 70, "b": 20},
-        legend={"title": {"text": "Entity type"}},
-        xaxis={"visible": False},
-        yaxis={"visible": False},
-    )
+    payload = build_visual_payload(entities, relations)
+    payload["meta"] = {
+        "title": "IFS Knowledge Graph",
+        "scope": f"Communities detected in this view{focus}",
+    }
+    document = render_visual_dashboard(payload, "IFS Knowledge Graph Dashboard")
     output.parent.mkdir(parents=True, exist_ok=True)
-    figure.write_html(output, include_plotlyjs=True, full_html=True)
+    output.write_text(document, encoding="utf-8")
     print(
-        f"Wrote {output} with {len(entities)} entities and "
-        f"{len(relations)} relationships"
+        f"Wrote interactive dashboard {output} with {len(entities)} entities, "
+        f"{len(relations)} relationships, and {len(payload['communities'])} communities"
     )
 
 
@@ -1019,6 +1123,12 @@ def make_parser() -> argparse.ArgumentParser:
     )
     build.add_argument("--chunk-chars", type=int, default=3500)
     build.add_argument("--overlap-chars", type=int, default=300)
+    build.add_argument(
+        "--skip-dashboard",
+        action="store_true",
+        help="Do not generate graph_dashboard.html after building",
+    )
+    build.add_argument("--dashboard-max-nodes", type=int, default=500)
     build.set_defaults(func=build_bundle)
 
     query = subparsers.add_parser("query", help="Query without any network call")
@@ -1035,15 +1145,17 @@ def make_parser() -> argparse.ArgumentParser:
     inspect.set_defaults(func=inspect_bundle)
 
     visualize = subparsers.add_parser(
-        "visualize", help="Create an offline interactive HTML graph"
+        "visualize", help="Create an offline interactive graph dashboard"
     )
     visualize.add_argument("--bundle", type=Path, required=True)
-    visualize.add_argument("--output", type=Path, default=Path("ifs_graph.html"))
+    visualize.add_argument(
+        "--output", type=Path, default=Path("ifs_graph_dashboard.html")
+    )
     visualize.add_argument(
         "--entity", help="Show entities whose names contain this text and their neighbors"
     )
     visualize.add_argument("--depth", type=int, default=2)
-    visualize.add_argument("--max-nodes", type=int, default=150)
+    visualize.add_argument("--max-nodes", type=int, default=500)
     visualize.set_defaults(func=visualize_bundle)
     return parser
 

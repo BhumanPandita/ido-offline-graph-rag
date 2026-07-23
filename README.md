@@ -73,7 +73,15 @@ ifs_mobile_bundle/
   embeddings.npy
   manifest.json
   models/embeddings/
+  graph_dashboard.html
 ```
+
+The build also creates `graph_dashboard.html` automatically. It is a
+self-contained offline dashboard for inspecting communities, entities,
+relationships, verbatim evidence, source files, and pages. Add
+`--skip-dashboard` only when you do not want this laptop inspection artifact in
+the bundle. If Azure extracts no grounded relationships, the retrieval bundle
+is still created and the dashboard is skipped with a clear message.
 
 ### If Hugging Face downloads are blocked
 
@@ -144,16 +152,25 @@ python offline_graph_rag.py inspect \
 
 ## 4. Visualize the knowledge graph
 
-Generate a self-contained HTML visualization with no Azure or other network
-call:
+Every new build already contains `ifs_mobile_bundle/graph_dashboard.html`.
+Open it directly in Chrome or Edge; it makes no Azure or other network call.
+
+You can also generate the dashboard from an existing bundle without rebuilding
+the index or calling Azure:
 
 ```bash
 python offline_graph_rag.py visualize \
   --bundle ifs_mobile_bundle \
-  --output ifs_graph.html
+  --output ifs_graph_dashboard.html
 ```
 
-The default view shows up to 150 of the highest-connected entities. For a
+The dashboard detects Louvain communities within the displayed graph and
+colors entities by community. It includes entity search; community, entity
+type, relationship, and source filters; a cross-community view; zoom and pan;
+clickable nodes and connections; community summaries; and an evidence table
+with document/page provenance.
+
+The default view shows up to 500 of the highest-connected entities. For a
 focused view around a particular module, screen, process, task, or role:
 
 ```bash
@@ -161,13 +178,13 @@ python offline_graph_rag.py visualize \
   --bundle ifs_mobile_bundle \
   --entity "work order" \
   --depth 2 \
-  --output work_order_graph.html
+  --output work_order_dashboard.html
 ```
 
-Open the resulting HTML file in a browser. Nodes are colored by entity type.
-Hover over a relationship line's midpoint to see its direction, predicate,
-verbatim evidence, source document, and page. Treat the HTML as company data
-because it contains extracted names and source quotations.
+Communities are calculated for the entities included in that dashboard, so a
+focused or truncated view can have different community boundaries from the
+full graph. Treat the HTML as company data because it contains extracted names
+and source quotations.
 
 ## Mobile boundary
 

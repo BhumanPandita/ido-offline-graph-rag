@@ -13,14 +13,16 @@ from offline_graph_rag import (
     LOCAL_HASH_EMBED_MODEL,
     LocalHashEmbedder,
     add_extraction,
+    build_visual_payload,
     collect_context,
+    detect_visual_communities,
+    generate_build_dashboard,
     initialize_database,
     relation_is_grounded,
     normalize_azure_endpoint,
     select_visual_subgraph,
     split_text,
     top_positions,
-    visualize_bundle,
     make_parser,
 )
 
@@ -158,6 +160,70 @@ class OfflineGraphRagTests(unittest.TestCase):
         self.assertEqual({entity["name"] for entity in entities}, {"Work Order", "IFS"})
         self.assertEqual(len(relations), 1)
 
+    def test_visual_communities_group_dense_clusters_and_keep_isolates(self):
+        entities = [
+            {"id": entity_id, "name": entity_id.upper(), "type": "OTHER"}
+            for entity_id in ("a", "b", "c", "d", "e", "f", "isolated")
+        ]
+        pairs = [
+            ("a", "b"),
+            ("b", "c"),
+            ("c", "a"),
+            ("d", "e"),
+            ("e", "f"),
+            ("f", "d"),
+            ("c", "d"),
+        ]
+        relations = [
+            {"source_id": source_id, "target_id": target_id}
+            for source_id, target_id in pairs
+        ]
+        communities, _ = detect_visual_communities(entities, relations)
+        self.assertEqual(communities["a"], communities["b"])
+        self.assertEqual(communities["d"], communities["e"])
+        self.assertNotEqual(communities["a"], communities["d"])
+        self.assertNotIn(
+            communities["isolated"],
+            {communities["a"], communities["d"]},
+        )
+
+    def test_visual_payload_groups_parallel_edges_without_losing_evidence(self):
+        entities = [
+            {"id": "a", "name": "Work Order", "type": "PROCESS"},
+            {"id": "b", "name": "Approval", "type": "STATUS"},
+        ]
+        relations = [
+            {
+                "id": "r1",
+                "source_id": "a",
+                "target_id": "b",
+                "subject": "Work Order",
+                "predicate": "REQUIRES",
+                "object": "Approval",
+                "evidence_quote": "A work order requires approval.",
+                "source": "guide.pdf",
+                "page": 3,
+                "chunk_id": "chunk-1",
+            },
+            {
+                "id": "r2",
+                "source_id": "b",
+                "target_id": "a",
+                "subject": "Approval",
+                "predicate": "APPLIES_TO",
+                "object": "Work Order",
+                "evidence_quote": "Approval applies to the work order.",
+                "source": "guide.pdf",
+                "page": 4,
+                "chunk_id": "chunk-2",
+            },
+        ]
+        payload = build_visual_payload(entities, relations)
+        self.assertEqual(len(payload["edge_groups"]), 1)
+        self.assertEqual(set(payload["edge_groups"][0]["relation_ids"]), {"r1", "r2"})
+        self.assertEqual(payload["relations"][0]["evidence"], relations[0]["evidence_quote"])
+        self.assertEqual(payload["relations"][0]["chunk_id"], "chunk-1")
+
     def test_visualization_writes_self_contained_html(self):
         with tempfile.TemporaryDirectory() as temp_name:
             bundle = Path(temp_name) / "bundle"
@@ -192,19 +258,37 @@ class OfflineGraphRagTests(unittest.TestCase):
             )
             connection.commit()
             connection.close()
-            output = Path(temp_name) / "graph.html"
-            visualize_bundle(
+            output = bundle / "graph_dashboard.html"
+            generated = generate_build_dashboard(
+                bundle,
                 SimpleNamespace(
-                    bundle=bundle,
-                    output=output,
-                    entity=None,
-                    depth=2,
-                    max_nodes=10,
-                )
+                    skip_dashboard=False,
+                    dashboard_max_nodes=10,
+                ),
+                accepted_relations=1,
             )
+            self.assertTrue(generated)
             html_text = output.read_text(encoding="utf-8")
             self.assertIn("plotly.js", html_text)
             self.assertIn("Work Order", html_text)
+            self.assertIn("Communities", html_text)
+            self.assertIn('id="relationship-table"', html_text)
+            self.assertNotIn("<script src=", html_text)
+
+    def test_zero_relation_build_skips_dashboard_without_failing(self):
+        with tempfile.TemporaryDirectory() as temp_name:
+            bundle = Path(temp_name) / "bundle"
+            bundle.mkdir()
+            generated = generate_build_dashboard(
+                bundle,
+                SimpleNamespace(
+                    skip_dashboard=False,
+                    dashboard_max_nodes=10,
+                ),
+                accepted_relations=0,
+            )
+            self.assertFalse(generated)
+            self.assertFalse((bundle / "graph_dashboard.html").exists())
 
 
 if __name__ == "__main__":
