@@ -14,6 +14,7 @@ from offline_graph_rag import (
     collect_context,
     initialize_database,
     relation_is_grounded,
+    normalize_azure_endpoint,
     select_visual_subgraph,
     split_text,
     top_positions,
@@ -72,6 +73,14 @@ class OfflineGraphRagTests(unittest.TestCase):
         embeddings = np.asarray([[1.0, 0.0], [0.0, 1.0]], dtype=np.float16)
         query = np.asarray([0.9, 0.1], dtype=np.float32)
         self.assertEqual(top_positions(embeddings, query, top_k=1), [0])
+
+    def test_azure_endpoint_normalization_matches_diagnostic_script(self):
+        self.assertEqual(
+            normalize_azure_endpoint(
+                "https://example.openai.azure.com/openai/v1/"
+            ),
+            "https://example.openai.azure.com",
+        )
 
     def test_retrieved_chunk_is_returned_without_a_graph_relation(self):
         connection = sqlite3.connect(":memory:")

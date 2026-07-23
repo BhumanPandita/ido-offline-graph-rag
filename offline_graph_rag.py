@@ -119,6 +119,20 @@ def canonical_name(value: str) -> str:
     return normalized_space(value).casefold()
 
 
+def normalize_azure_endpoint(endpoint: str) -> str:
+    """Return the Azure resource base URL expected by AzureOpenAI."""
+    endpoint = endpoint.strip().rstrip("/")
+    for suffix in ("/openai/v1", "/openai"):
+        if endpoint.lower().endswith(suffix):
+            endpoint = endpoint[: -len(suffix)].rstrip("/")
+    if "/deployments/" in endpoint.lower():
+        raise ValueError(
+            "AZURE_OPENAI_ENDPOINT must be the resource URL only; "
+            "remove /openai/deployments/..."
+        )
+    return endpoint
+
+
 def iter_source_pages(input_dir: Path) -> Iterable[tuple[str, int | None, str]]:
     files = sorted(
         path
@@ -207,7 +221,11 @@ class AzureGraphExtractor:
         required = {
             "AZURE_OPENAI_ENDPOINT": os.getenv("AZURE_OPENAI_ENDPOINT"),
             "AZURE_OPENAI_API_KEY": os.getenv("AZURE_OPENAI_API_KEY"),
-            "AZURE_OPENAI_DEPLOYMENT": os.getenv("AZURE_OPENAI_DEPLOYMENT"),
+            "AZURE_OPENAI_DEPLOYMENT": (
+                os.getenv("AZURE_OPENAI_DEPLOYMENT")
+                or os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+                or os.getenv("AZURE_OPENAI_MODEL_NAME")
+            ),
         }
         missing = [name for name, value in required.items() if not value]
         if missing:
@@ -218,7 +236,7 @@ class AzureGraphExtractor:
 
         self.deployment = required["AZURE_OPENAI_DEPLOYMENT"]
         self.client = AzureOpenAI(
-            azure_endpoint=required["AZURE_OPENAI_ENDPOINT"],
+            azure_endpoint=normalize_azure_endpoint(required["AZURE_OPENAI_ENDPOINT"]),
             api_key=required["AZURE_OPENAI_API_KEY"],
             api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-21"),
             max_retries=5,
