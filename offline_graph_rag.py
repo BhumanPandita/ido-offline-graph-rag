@@ -449,8 +449,13 @@ def build_bundle(args: argparse.Namespace) -> None:
 
         retrieval_texts = create_retrieval_items(connection)
         connection.commit()
-        connection.execute("VACUUM")
+        vacuum_cursor = connection.execute("VACUUM")
+        # Close the cursor explicitly before moving the temporary directory.
+        # Windows otherwise may keep graph.sqlite3 locked (WinError 32).
+        vacuum_cursor.close()
+        connection.commit()
         connection.close()
+        del connection
 
         embedder = get_embedder(args.embedding_model, model_cache, offline=False)
         embeddings = embed_texts(embedder, retrieval_texts)
