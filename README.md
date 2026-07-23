@@ -96,18 +96,18 @@ embeddings later if company-approved model access becomes available.
 
 This project uses FastEmbed's ONNX version of BGE, not the original PyTorch
 model files. From a browser on a machine that can access Hugging Face, download
-every file from the `Qdrant/bge-small-en-v1.5-onnx-q` repository into one local
+every file from the `Qdrant/bge-small-en-v1.5-onnx-Q` repository into one local
 folder, then transfer that whole folder to the company laptop. Do not download
 only one `.onnx` file: the tokenizer and configuration files are also required.
 
-For example, if the transferred folder is `models/bge-small-en-v1.5-onnx-q/`:
+For example, if the transferred folder is `models/bge-small-en-v1.5-onnx-Q/`:
 
 ```bash
 python offline_graph_rag.py build \
   --input data \
   --output ifs_mobile_bundle \
   --embedding-model BAAI/bge-small-en-v1.5 \
-  --embedding-path models/bge-small-en-v1.5-onnx-q
+  --embedding-path models/bge-small-en-v1.5-onnx-Q
 ```
 
 `--embedding-path` copies the model into `ifs_mobile_bundle/models/embeddings/`.
