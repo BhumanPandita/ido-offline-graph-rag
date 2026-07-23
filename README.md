@@ -21,8 +21,15 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-Do not commit `.env` or company documents. Export the four variables shown in
-`.env.example` through your approved secret-management process.
+Copy `.env.example` to `.env`, fill in the values, and keep the file local:
+
+```bash
+cp .env.example .env
+```
+
+The CLI loads `.env` automatically. Alternatively, export the four variables
+in Git Bash with `export NAME=value`. Do not commit `.env` or company
+documents; use your approved secret-management process for the values.
 
 ## 2. Build the graph
 

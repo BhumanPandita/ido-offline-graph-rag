@@ -191,6 +191,14 @@ def load_chunks(input_dir: Path, max_chars: int, overlap_chars: int) -> list[Chu
 class AzureGraphExtractor:
     def __init__(self) -> None:
         try:
+            from dotenv import load_dotenv
+        except ImportError as exc:
+            raise RuntimeError(
+                "Install python-dotenv or export the Azure variables in Git Bash"
+            ) from exc
+        load_dotenv()
+
+        try:
             from openai import AzureOpenAI
         except ImportError as exc:
             raise RuntimeError("Install the openai package to use Azure extraction") from exc
@@ -202,7 +210,10 @@ class AzureGraphExtractor:
         }
         missing = [name for name, value in required.items() if not value]
         if missing:
-            raise ValueError(f"Missing environment variables: {', '.join(missing)}")
+            raise ValueError(
+                f"Missing environment variables: {', '.join(missing)}. "
+                "Create a .env file from .env.example or export these variables."
+            )
 
         self.deployment = required["AZURE_OPENAI_DEPLOYMENT"]
         self.client = AzureOpenAI(
