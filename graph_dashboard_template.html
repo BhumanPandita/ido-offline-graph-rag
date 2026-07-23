@@ -1,0 +1,937 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>__DASHBOARD_TITLE__</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --navy: #101d3a;
+      --ink: #18243b;
+      --muted: #63708a;
+      --line: #dce3ef;
+      --surface: #ffffff;
+      --canvas: #f3f6fb;
+      --accent: #315efb;
+      --accent-soft: #e8edff;
+      --cross: #e18b28;
+      --shadow: 0 14px 35px rgba(19, 35, 68, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+    }
+    button, input, select { font: inherit; }
+    button:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 3px solid rgba(49, 94, 251, 0.25);
+      outline-offset: 1px;
+    }
+    .app-shell { min-height: 100vh; }
+    .hero {
+      padding: 28px clamp(18px, 4vw, 56px) 66px;
+      color: #fff;
+      background:
+        radial-gradient(circle at 86% 18%, rgba(84, 124, 255, 0.36), transparent 26%),
+        linear-gradient(128deg, #101d3a 0%, #152a59 62%, #1e3c82 100%);
+    }
+    .hero-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+    .eyebrow {
+      margin: 0 0 8px;
+      color: #aabcf9;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(26px, 3vw, 42px);
+      line-height: 1.08;
+      letter-spacing: -0.035em;
+    }
+    .scope {
+      max-width: 760px;
+      margin: 10px 0 0;
+      color: #cbd6f6;
+      font-size: 14px;
+    }
+    .offline-pill {
+      flex: none;
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #e9efff;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    main {
+      max-width: 1600px;
+      margin: -42px auto 0;
+      padding: 0 clamp(14px, 3vw, 42px) 48px;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .metric, .panel {
+      border: 1px solid rgba(220, 227, 239, 0.9);
+      border-radius: 16px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .metric { padding: 16px 18px; }
+    .metric-value {
+      display: block;
+      font-size: 25px;
+      font-weight: 750;
+      letter-spacing: -0.025em;
+    }
+    .metric-label {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1.5fr) repeat(4, minmax(140px, 0.8fr)) auto;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 16px;
+      padding: 15px;
+    }
+    .field label {
+      display: block;
+      margin: 0 0 6px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.055em;
+      text-transform: uppercase;
+    }
+    .field input, .field select {
+      width: 100%;
+      min-height: 40px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #fff;
+      color: var(--ink);
+    }
+    .toolbar-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      min-height: 40px;
+    }
+    .check {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .btn {
+      min-height: 40px;
+      padding: 8px 13px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #fff;
+      color: var(--ink);
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .btn:hover { border-color: #aebbd1; background: #f8faff; }
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 2.3fr) minmax(300px, 0.9fr);
+      gap: 16px;
+      align-items: stretch;
+    }
+    .graph-panel { position: relative; min-width: 0; overflow: hidden; }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 15px 18px 0;
+    }
+    .panel-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 750;
+    }
+    .panel-note { color: var(--muted); font-size: 12px; }
+    #graph { width: 100%; height: 680px; }
+    .graph-legend {
+      position: absolute;
+      right: 14px;
+      bottom: 14px;
+      display: flex;
+      max-width: min(70%, 620px);
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px 10px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(8px);
+      font-size: 11px;
+    }
+    .legend-item { display: inline-flex; align-items: center; gap: 5px; }
+    .swatch {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--swatch);
+    }
+    .detail-panel {
+      height: 734px;
+      overflow: auto;
+    }
+    #detail { padding: 14px 18px 20px; }
+    .detail-empty {
+      padding: 70px 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+    .detail-title {
+      margin: 0 0 8px;
+      font-size: 22px;
+      line-height: 1.2;
+    }
+    .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 25px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: #264dcc;
+      font-size: 11px;
+      font-weight: 750;
+    }
+    .mini-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin: 0 0 16px;
+    }
+    .mini-stat {
+      padding: 9px;
+      border-radius: 10px;
+      background: #f6f8fc;
+      text-align: center;
+    }
+    .mini-stat strong { display: block; font-size: 17px; }
+    .mini-stat span { color: var(--muted); font-size: 10px; text-transform: uppercase; }
+    .relation-card {
+      margin-top: 10px;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: #fbfcff;
+    }
+    .relation-path { font-size: 12px; font-weight: 750; line-height: 1.45; }
+    .predicate { color: #315efb; }
+    .evidence {
+      margin: 8px 0 6px;
+      color: #34415a;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .source { color: var(--muted); font-size: 11px; }
+    .section-grid {
+      display: grid;
+      grid-template-columns: minmax(320px, 0.82fr) minmax(0, 1.7fr);
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .section-body { padding: 12px 18px 18px; }
+    .table-wrap { width: 100%; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 750;
+      letter-spacing: 0.055em;
+      text-align: left;
+      text-transform: uppercase;
+    }
+    td {
+      padding: 10px 8px;
+      border-bottom: 1px solid #edf1f7;
+      font-size: 12px;
+      vertical-align: top;
+    }
+    tbody tr:last-child td { border-bottom: 0; }
+    .link-button {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: #274fc9;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 700;
+      text-align: left;
+    }
+    .link-button:hover { text-decoration: underline; }
+    .community-name { display: flex; align-items: flex-start; gap: 8px; }
+    .community-dot {
+      width: 10px;
+      height: 10px;
+      flex: none;
+      margin-top: 3px;
+      border-radius: 50%;
+      background: var(--dot);
+    }
+    .truncate-evidence {
+      display: -webkit-box;
+      max-width: 520px;
+      overflow: hidden;
+      color: #4a5872;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+    .empty-row { padding: 28px 8px; color: var(--muted); text-align: center; }
+    .cross-key {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .cross-line { width: 18px; border-top: 2px dashed var(--cross); }
+
+    @media (max-width: 1200px) {
+      .toolbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .toolbar-actions { flex-wrap: wrap; }
+    }
+    @media (max-width: 900px) {
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .workspace, .section-grid { grid-template-columns: 1fr; }
+      .detail-panel { height: auto; max-height: 560px; }
+      #graph { height: 590px; }
+    }
+    @media (max-width: 620px) {
+      .hero-row { display: block; }
+      .offline-pill { display: inline-block; margin-top: 16px; }
+      .metrics, .toolbar { grid-template-columns: 1fr; }
+      .toolbar-actions { align-items: flex-start; }
+      #graph { height: 500px; }
+      .graph-legend { position: static; max-width: none; justify-content: flex-start; margin: 0 14px 14px; }
+      .metric { padding: 13px 15px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero">
+      <div class="hero-row">
+        <div>
+          <p class="eyebrow">Offline Graph RAG Explorer</p>
+          <h1 id="dashboard-title">IFS Knowledge Graph</h1>
+          <p class="scope" id="dashboard-scope"></p>
+        </div>
+        <div class="offline-pill">● Fully offline · grounded evidence</div>
+      </div>
+    </header>
+
+    <main>
+      <section class="metrics" aria-label="Graph summary">
+        <div class="metric"><span class="metric-value" id="node-count">0</span><span class="metric-label">Entities shown</span></div>
+        <div class="metric"><span class="metric-value" id="relation-count">0</span><span class="metric-label">Relationships shown</span></div>
+        <div class="metric"><span class="metric-value" id="community-count">0</span><span class="metric-label">Communities in view</span></div>
+        <div class="metric"><span class="metric-value" id="source-count">0</span><span class="metric-label">Source documents</span></div>
+      </section>
+
+      <section class="toolbar panel" aria-label="Graph filters">
+        <div class="field">
+          <label for="entity-search">Find entity</label>
+          <input id="entity-search" list="entity-options" placeholder="Type a screen, process, task…">
+          <datalist id="entity-options"></datalist>
+        </div>
+        <div class="field">
+          <label for="community-filter">Community</label>
+          <select id="community-filter"><option value="">All communities</option></select>
+        </div>
+        <div class="field">
+          <label for="type-filter">Entity type</label>
+          <select id="type-filter"><option value="">All entity types</option></select>
+        </div>
+        <div class="field">
+          <label for="predicate-filter">Relationship</label>
+          <select id="predicate-filter"><option value="">All relationships</option></select>
+        </div>
+        <div class="field">
+          <label for="source-filter">Source document</label>
+          <select id="source-filter"><option value="">All sources</option></select>
+        </div>
+        <div class="toolbar-actions">
+          <label class="check"><input id="cross-filter" type="checkbox"> Cross-community only</label>
+          <label class="check"><input id="labels-toggle" type="checkbox" checked> Labels</label>
+          <button class="btn" id="reset-button" type="button">Reset</button>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <div class="panel graph-panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Relationship network</h2>
+              <span class="panel-note">Zoom, pan, hover, or select a node/connection</span>
+            </div>
+            <span class="panel-note cross-key"><span class="cross-line"></span>Cross-community</span>
+          </div>
+          <div id="graph" role="img" aria-label="Interactive IFS entity relationship graph"></div>
+          <div class="graph-legend" id="community-legend" aria-label="Community color legend"></div>
+        </div>
+
+        <aside class="panel detail-panel">
+          <div class="panel-header">
+            <h2 class="panel-title">Evidence inspector</h2>
+            <span class="panel-note" id="detail-count"></span>
+          </div>
+          <div id="detail"><div class="detail-empty">Select an entity or relationship to inspect its grounded evidence.</div></div>
+        </aside>
+      </section>
+
+      <section class="section-grid">
+        <div class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title">Communities</h2>
+            <span class="panel-note">Detected within this displayed graph</span>
+          </div>
+          <div class="section-body table-wrap">
+            <table>
+              <thead><tr><th>Community</th><th>Entities</th><th>Relations</th></tr></thead>
+              <tbody id="community-table"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title">Relationship evidence</h2>
+            <span class="panel-note" id="table-count"></span>
+          </div>
+          <div class="section-body table-wrap">
+            <table>
+              <thead><tr><th>From</th><th>Relationship</th><th>To</th><th>Evidence</th><th>Source</th></tr></thead>
+              <tbody id="relationship-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>__PLOTLY_JAVASCRIPT__</script>
+  <script>
+    const graphData = __GRAPH_DATA__;
+    const nodeById = new Map(graphData.nodes.map(node => [node.id, node]));
+    const relationById = new Map(graphData.relations.map(relation => [relation.id, relation]));
+    const colors = [
+      "#315efb", "#00a6a6", "#8b5cf6", "#e18b28", "#e04f75", "#5b8c3b",
+      "#3076a8", "#a35f22", "#6d7280", "#b04dab", "#1f9d6a", "#c85b42"
+    ];
+    const state = {
+      selectedKind: "node",
+      selectedId: null,
+      filteredNodes: [],
+      filteredRelations: [],
+      filteredGroups: [],
+      filterRevision: 0
+    };
+
+    const graphElement = document.getElementById("graph");
+    const searchInput = document.getElementById("entity-search");
+    const communityFilter = document.getElementById("community-filter");
+    const typeFilter = document.getElementById("type-filter");
+    const predicateFilter = document.getElementById("predicate-filter");
+    const sourceFilter = document.getElementById("source-filter");
+    const crossFilter = document.getElementById("cross-filter");
+    const labelsToggle = document.getElementById("labels-toggle");
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function communityColor(community) {
+      return colors[(Number(community) - 1) % colors.length];
+    }
+
+    function sourceLabel(relation) {
+      return relation.page
+        ? `${relation.source}, page ${relation.page}`
+        : relation.source;
+    }
+
+    function populateSelect(select, values, labeler = value => value) {
+      values.forEach(value => {
+        const option = document.createElement("option");
+        option.value = value.id ?? value;
+        option.textContent = labeler(value);
+        select.appendChild(option);
+      });
+    }
+
+    function initializeControls() {
+      document.getElementById("dashboard-title").textContent = graphData.meta.title;
+      document.getElementById("dashboard-scope").textContent = graphData.meta.scope;
+      populateSelect(
+        communityFilter,
+        graphData.communities,
+        item => `Community ${item.id} — ${item.label}`
+      );
+      populateSelect(typeFilter, graphData.filters.entity_types);
+      populateSelect(predicateFilter, graphData.filters.predicates);
+      populateSelect(sourceFilter, graphData.filters.sources);
+
+      const options = document.getElementById("entity-options");
+      [...graphData.nodes]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .forEach(node => {
+          const option = document.createElement("option");
+          option.value = node.name;
+          options.appendChild(option);
+        });
+    }
+
+    function applyFilters() {
+      const community = communityFilter.value;
+      const entityType = typeFilter.value;
+      const predicate = predicateFilter.value;
+      const source = sourceFilter.value;
+      const crossOnly = crossFilter.checked;
+
+      state.filteredNodes = graphData.nodes.filter(node =>
+        (!community || String(node.community) === community) &&
+        (!entityType || node.type === entityType)
+      );
+      const nodeIds = new Set(state.filteredNodes.map(node => node.id));
+      state.filteredRelations = graphData.relations.filter(relation =>
+        nodeIds.has(relation.source_id) &&
+        nodeIds.has(relation.target_id) &&
+        (!predicate || relation.predicate === predicate) &&
+        (!source || relation.source === source) &&
+        (!crossOnly || relation.cross_community)
+      );
+      if (predicate || source || crossOnly) {
+        const connectedIds = new Set(
+          state.filteredRelations.flatMap(relation => [
+            relation.source_id,
+            relation.target_id
+          ])
+        );
+        state.filteredNodes = state.filteredNodes.filter(node => connectedIds.has(node.id));
+      }
+
+      const visibleRelationIds = new Set(state.filteredRelations.map(relation => relation.id));
+      state.filteredGroups = graphData.edge_groups
+        .map(group => ({
+          ...group,
+          relation_ids: group.relation_ids.filter(id => visibleRelationIds.has(id))
+        }))
+        .filter(group => group.relation_ids.length);
+
+      state.filterRevision += 1;
+      const selectionIsVisible = state.selectedKind === "edge"
+        ? state.filteredGroups.some(group => group.id === state.selectedId)
+        : state.filteredNodes.some(node => node.id === state.selectedId);
+      if (!selectionIsVisible) {
+        state.selectedKind = "node";
+        state.selectedId = [...state.filteredNodes]
+          .sort((a, b) => b.degree - a.degree)[0]?.id ?? null;
+      }
+
+      renderMetrics();
+      renderGraph();
+      renderRelationshipTable();
+      renderCommunityTable();
+      if (state.selectedId) {
+        renderDetail();
+      } else {
+        document.getElementById("detail-count").textContent = "";
+        document.getElementById("detail").innerHTML =
+          `<div class="detail-empty">No entities match the active filters.</div>`;
+      }
+    }
+
+    function renderMetrics() {
+      document.getElementById("node-count").textContent =
+        `${state.filteredNodes.length}/${graphData.nodes.length}`;
+      document.getElementById("relation-count").textContent =
+        `${state.filteredRelations.length}/${graphData.relations.length}`;
+      const communities = new Set(state.filteredNodes.map(node => node.community));
+      const sources = new Set(state.filteredRelations.map(relation => relation.source));
+      document.getElementById("community-count").textContent = communities.size;
+      document.getElementById("source-count").textContent = sources.size;
+    }
+
+    function lineTrace(groups, crossCommunity) {
+      const x = [];
+      const y = [];
+      groups.forEach(group => {
+        const source = nodeById.get(group.source_id);
+        const target = nodeById.get(group.target_id);
+        x.push(source.x, target.x, null);
+        y.push(source.y, target.y, null);
+      });
+      return {
+        type: "scatter",
+        mode: "lines",
+        x,
+        y,
+        hoverinfo: "skip",
+        line: {
+          color: crossCommunity ? "#e18b28" : "#b8c3d5",
+          width: crossCommunity ? 1.7 : 1.05,
+          dash: crossCommunity ? "dot" : "solid"
+        },
+        opacity: crossCommunity ? 0.72 : 0.48,
+        showlegend: false
+      };
+    }
+
+    function renderGraph() {
+      const visibleNodeIds = new Set(state.filteredNodes.map(node => node.id));
+      const labelIds = new Set(
+        [...state.filteredNodes]
+          .sort((a, b) => b.degree - a.degree || a.name.localeCompare(b.name))
+          .slice(0, state.filteredNodes.length <= 80 ? state.filteredNodes.length : 35)
+          .map(node => node.id)
+      );
+      if (state.selectedKind === "node" && state.selectedId) labelIds.add(state.selectedId);
+
+      const withinGroups = [];
+      const crossGroups = [];
+      state.filteredGroups.forEach(group => {
+        const source = nodeById.get(group.source_id);
+        const target = nodeById.get(group.target_id);
+        (source.community === target.community ? withinGroups : crossGroups).push(group);
+      });
+
+      const traces = [
+        lineTrace(withinGroups, false),
+        lineTrace(crossGroups, true)
+      ];
+
+      const midpointX = [];
+      const midpointY = [];
+      const midpointText = [];
+      const midpointData = [];
+      state.filteredGroups.forEach(group => {
+        const source = nodeById.get(group.source_id);
+        const target = nodeById.get(group.target_id);
+        const relations = group.relation_ids.map(id => relationById.get(id));
+        const predicates = [...new Set(relations.map(relation => relation.predicate))];
+        midpointX.push((source.x + target.x) / 2);
+        midpointY.push((source.y + target.y) / 2);
+        midpointText.push(
+          `<b>${escapeHtml(source.name)} ↔ ${escapeHtml(target.name)}</b><br>` +
+          `${relations.length} grounded relation${relations.length === 1 ? "" : "s"}<br>` +
+          escapeHtml(predicates.join(", "))
+        );
+        midpointData.push(["edge", group.id]);
+      });
+      traces.push({
+        type: "scatter",
+        mode: "markers",
+        x: midpointX,
+        y: midpointY,
+        text: midpointText,
+        customdata: midpointData,
+        hovertemplate: "%{text}<extra></extra>",
+        marker: { size: 14, color: "rgba(20,35,65,0.01)" },
+        showlegend: false
+      });
+
+      const communities = [...new Set(state.filteredNodes.map(node => node.community))].sort((a, b) => a - b);
+      communities.forEach(community => {
+        const nodes = state.filteredNodes.filter(node => node.community === community);
+        traces.push({
+          type: "scatter",
+          mode: labelsToggle.checked ? "markers+text" : "markers",
+          x: nodes.map(node => node.x),
+          y: nodes.map(node => node.y),
+          text: nodes.map(node => labelIds.has(node.id) ? node.name : ""),
+          textposition: "top center",
+          textfont: { size: 10, color: "#31405a" },
+          customdata: nodes.map(node => ["node", node.id]),
+          hovertext: nodes.map(node =>
+            `<b>${escapeHtml(node.name)}</b><br>` +
+            `Type: ${escapeHtml(node.type)}<br>` +
+            `Community ${node.community}<br>` +
+            `${node.degree} grounded relationships`
+          ),
+          hovertemplate: "%{hovertext}<extra></extra>",
+          marker: {
+            size: nodes.map(node => Math.min(36, 13 + 3.4 * Math.sqrt(Math.max(node.degree, 1)))),
+            color: communityColor(community),
+            opacity: 0.94,
+            line: {
+              width: nodes.map(node =>
+                state.selectedKind === "node" && state.selectedId === node.id ? 4 : 1.3
+              ),
+              color: nodes.map(node =>
+                state.selectedKind === "node" && state.selectedId === node.id ? "#101d3a" : "#ffffff"
+              )
+            }
+          },
+          name: `Community ${community}`,
+          showlegend: false
+        });
+      });
+
+      const layout = {
+        margin: { l: 14, r: 14, t: 8, b: 18 },
+        height: window.innerWidth <= 620 ? 500 : (window.innerWidth <= 900 ? 590 : 680),
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        hovermode: "closest",
+        dragmode: "pan",
+        xaxis: { visible: false, fixedrange: false },
+        yaxis: { visible: false, fixedrange: false, scaleanchor: "x", scaleratio: 1 },
+        uirevision: `ifs-graph-${state.filterRevision}`
+      };
+      Plotly.react(graphElement, traces, layout, {
+        responsive: true,
+        displaylogo: false,
+        scrollZoom: true,
+        modeBarButtonsToRemove: ["select2d", "lasso2d", "autoScale2d"]
+      });
+
+      document.getElementById("community-legend").innerHTML = communities
+        .map(community =>
+          `<span class="legend-item"><span class="swatch" style="--swatch:${communityColor(community)}"></span>` +
+          `Community ${community}</span>`
+        ).join("");
+    }
+
+    function renderDetail() {
+      if (state.selectedKind === "edge") {
+        renderEdgeDetail(state.selectedId);
+      } else {
+        renderNodeDetail(state.selectedId);
+      }
+    }
+
+    function relationCard(relation) {
+      return `<article class="relation-card">` +
+        `<div class="relation-path">${escapeHtml(relation.subject)} ` +
+        `<span class="predicate">—${escapeHtml(relation.predicate)}→</span> ` +
+        `${escapeHtml(relation.object)}</div>` +
+        `<p class="evidence">“${escapeHtml(relation.evidence)}”</p>` +
+        `<div class="source">${escapeHtml(sourceLabel(relation))}</div>` +
+        `</article>`;
+    }
+
+    function renderNodeDetail(nodeId) {
+      const node = nodeById.get(nodeId);
+      if (!node) return;
+      const relations = state.filteredRelations.filter(
+        relation => relation.source_id === nodeId || relation.target_id === nodeId
+      );
+      const outgoing = relations.filter(relation => relation.source_id === nodeId).length;
+      const incoming = relations.filter(relation => relation.target_id === nodeId).length;
+      document.getElementById("detail-count").textContent =
+        `${relations.length} relationship${relations.length === 1 ? "" : "s"}`;
+      document.getElementById("detail").innerHTML =
+        `<h3 class="detail-title">${escapeHtml(node.name)}</h3>` +
+        `<div class="badges"><span class="badge">${escapeHtml(node.type)}</span>` +
+        `<span class="badge">Community ${node.community}</span></div>` +
+        `<div class="mini-stats">` +
+        `<div class="mini-stat"><strong>${relations.length}</strong><span>Total</span></div>` +
+        `<div class="mini-stat"><strong>${outgoing}</strong><span>Outgoing</span></div>` +
+        `<div class="mini-stat"><strong>${incoming}</strong><span>Incoming</span></div>` +
+        `</div>` +
+        (relations.length
+          ? relations.map(relationCard).join("")
+          : `<div class="detail-empty">No relationships match the active filters.</div>`);
+    }
+
+    function renderEdgeDetail(groupId) {
+      const group = state.filteredGroups.find(item => item.id === groupId);
+      if (!group) return;
+      const source = nodeById.get(group.source_id);
+      const target = nodeById.get(group.target_id);
+      const relations = group.relation_ids.map(id => relationById.get(id));
+      document.getElementById("detail-count").textContent =
+        `${relations.length} grounded relation${relations.length === 1 ? "" : "s"}`;
+      document.getElementById("detail").innerHTML =
+        `<h3 class="detail-title">${escapeHtml(source.name)} ↔ ${escapeHtml(target.name)}</h3>` +
+        `<div class="badges"><span class="badge">Community ${source.community}</span>` +
+        (source.community !== target.community
+          ? `<span class="badge">Cross-community link</span>`
+          : `<span class="badge">Within community</span>`) +
+        `</div>` +
+        relations.map(relationCard).join("");
+    }
+
+    function renderCommunityTable() {
+      const rows = graphData.communities
+        .map(community => {
+          const memberIds = new Set(
+            state.filteredNodes
+              .filter(node => node.community === community.id)
+              .map(node => node.id)
+          );
+          const relationshipCount = state.filteredRelations.filter(relation =>
+            memberIds.has(relation.source_id) || memberIds.has(relation.target_id)
+          ).length;
+          return { ...community, visibleEntityCount: memberIds.size, visibleRelationshipCount: relationshipCount };
+        })
+        .filter(community => community.visibleEntityCount)
+        .map(community =>
+          `<tr><td><div class="community-name">` +
+          `<span class="community-dot" style="--dot:${communityColor(community.id)}"></span>` +
+          `<button type="button" class="link-button community-button" data-community="${community.id}">` +
+          `Community ${community.id}</button></div>` +
+          `<div class="panel-note">${escapeHtml(community.label)}</div></td>` +
+          `<td>${community.visibleEntityCount}</td><td>${community.visibleRelationshipCount}</td></tr>`
+        );
+      document.getElementById("community-table").innerHTML =
+        rows.length ? rows.join("") : `<tr><td class="empty-row" colspan="3">No communities match the filters.</td></tr>`;
+    }
+
+    function renderRelationshipTable() {
+      const limit = 300;
+      const rows = state.filteredRelations.slice(0, limit).map(relation =>
+        `<tr>` +
+        `<td><button type="button" class="link-button node-button" data-node="${escapeHtml(relation.source_id)}">${escapeHtml(relation.subject)}</button></td>` +
+        `<td><span class="predicate">${escapeHtml(relation.predicate)}</span></td>` +
+        `<td><button type="button" class="link-button node-button" data-node="${escapeHtml(relation.target_id)}">${escapeHtml(relation.object)}</button></td>` +
+        `<td><span class="truncate-evidence">“${escapeHtml(relation.evidence)}”</span></td>` +
+        `<td>${escapeHtml(sourceLabel(relation))}</td>` +
+        `</tr>`
+      );
+      document.getElementById("relationship-table").innerHTML =
+        rows.length ? rows.join("") : `<tr><td class="empty-row" colspan="5">No relationships match the filters.</td></tr>`;
+      document.getElementById("table-count").textContent =
+        state.filteredRelations.length > limit
+          ? `Showing first ${limit} of ${state.filteredRelations.length}`
+          : `${state.filteredRelations.length} shown`;
+    }
+
+    function selectNode(nodeId) {
+      const node = nodeById.get(nodeId);
+      if (!node) return;
+      if (!state.filteredNodes.some(item => item.id === nodeId)) {
+        communityFilter.value = "";
+        typeFilter.value = "";
+        predicateFilter.value = "";
+        sourceFilter.value = "";
+        crossFilter.checked = false;
+        applyFilters();
+      }
+      state.selectedKind = "node";
+      state.selectedId = nodeId;
+      renderGraph();
+      renderNodeDetail(nodeId);
+    }
+
+    function selectEdge(groupId) {
+      state.selectedKind = "edge";
+      state.selectedId = groupId;
+      renderGraph();
+      renderEdgeDetail(groupId);
+    }
+
+    function runSearch() {
+      const query = searchInput.value.trim().toLocaleLowerCase();
+      if (!query) return;
+      const exact = graphData.nodes.find(node => node.name.toLocaleLowerCase() === query);
+      const partial = graphData.nodes
+        .filter(node => node.name.toLocaleLowerCase().includes(query))
+        .sort((a, b) => b.degree - a.degree)[0];
+      const match = exact || partial;
+      if (match) {
+        searchInput.value = match.name;
+        selectNode(match.id);
+      }
+    }
+
+    function resetDashboard() {
+      searchInput.value = "";
+      communityFilter.value = "";
+      typeFilter.value = "";
+      predicateFilter.value = "";
+      sourceFilter.value = "";
+      crossFilter.checked = false;
+      labelsToggle.checked = true;
+      state.selectedKind = "node";
+      state.selectedId = [...graphData.nodes].sort((a, b) => b.degree - a.degree)[0]?.id ?? null;
+      applyFilters();
+      if (state.selectedId) renderNodeDetail(state.selectedId);
+    }
+
+    initializeControls();
+    state.selectedId = [...graphData.nodes].sort((a, b) => b.degree - a.degree)[0]?.id ?? null;
+    applyFilters();
+    if (state.selectedId) renderNodeDetail(state.selectedId);
+
+    graphElement.on("plotly_click", event => {
+      const customdata = event.points?.[0]?.customdata;
+      if (!customdata) return;
+      if (customdata[0] === "node") selectNode(customdata[1]);
+      if (customdata[0] === "edge") selectEdge(customdata[1]);
+    });
+    communityFilter.addEventListener("change", () => {
+      if (communityFilter.value) crossFilter.checked = false;
+      applyFilters();
+    });
+    crossFilter.addEventListener("change", () => {
+      if (crossFilter.checked) communityFilter.value = "";
+      applyFilters();
+    });
+    [typeFilter, predicateFilter, sourceFilter]
+      .forEach(control => control.addEventListener("change", applyFilters));
+    labelsToggle.addEventListener("change", renderGraph);
+    searchInput.addEventListener("change", runSearch);
+    searchInput.addEventListener("keydown", event => {
+      if (event.key === "Enter") runSearch();
+    });
+    document.getElementById("reset-button").addEventListener("click", resetDashboard);
+    document.getElementById("community-table").addEventListener("click", event => {
+      const button = event.target.closest(".community-button");
+      if (!button) return;
+      communityFilter.value = button.dataset.community;
+      crossFilter.checked = false;
+      applyFilters();
+    });
+    document.getElementById("relationship-table").addEventListener("click", event => {
+      const button = event.target.closest(".node-button");
+      if (button) selectNode(button.dataset.node);
+    });
+  </script>
+</body>
+</html>
