@@ -419,18 +419,28 @@ class LocalHashEmbedder:
             yield vector
 
 
-def get_embedder(model_name: str, cache_dir: Path, offline: bool):
+def get_embedder(
+    model_name: str,
+    cache_dir: Path,
+    offline: bool,
+    model_path: Path | None = None,
+):
     if model_name == LOCAL_HASH_EMBED_MODEL:
+        if model_path:
+            raise ValueError("local-hash-v1 does not use an embedding model folder")
         return LocalHashEmbedder()
     try:
         from fastembed import TextEmbedding
     except ImportError as exc:
         raise RuntimeError("Install fastembed to create or query embeddings") from exc
-    return TextEmbedding(
-        model_name=model_name,
-        cache_dir=str(cache_dir),
-        local_files_only=offline,
-    )
+    options = {
+        "model_name": model_name,
+        "cache_dir": str(cache_dir),
+        "local_files_only": offline,
+    }
+    if model_path:
+        options["specific_model_path"] = str(model_path)
+    return TextEmbedding(**options)
 
 
 def embed_texts(embedder, texts: list[str]) -> np.ndarray:
@@ -467,10 +477,24 @@ def build_bundle(args: argparse.Namespace) -> None:
         temp_dir = Path(temp_name)
         database_path = temp_dir / "graph.sqlite3"
         model_cache = temp_dir / "models" / "embeddings"
+        manual_model_path = (
+            args.embedding_path.resolve() if args.embedding_path else None
+        )
+        if manual_model_path:
+            if not manual_model_path.is_dir():
+                raise FileNotFoundError(
+                    f"Embedding model folder not found: {manual_model_path}"
+                )
+            shutil.copytree(manual_model_path, model_cache)
         # Download the local embedding model before any paid Azure extraction.
         # A corporate-network/Hugging Face failure should fail fast here.
         print("Preparing the local embedding model...", flush=True)
-        embedder = get_embedder(args.embedding_model, model_cache, offline=False)
+        embedder = get_embedder(
+            args.embedding_model,
+            model_cache,
+            offline=bool(manual_model_path),
+            model_path=model_cache if manual_model_path else None,
+        )
 
         connection = sqlite3.connect(database_path)
         initialize_database(connection)
@@ -690,6 +714,9 @@ def query_bundle(args: argparse.Namespace) -> None:
         manifest["embedding_model"],
         bundle / "models" / "embeddings",
         offline=True,
+        model_path=(bundle / "models" / "embeddings")
+        if (bundle / "models" / "embeddings").is_dir()
+        else None,
     )
     query_vector = embed_texts(embedder, [args.question])[0]
     positions = top_positions(embeddings, query_vector, args.top_k)
@@ -985,6 +1012,11 @@ def make_parser() -> argparse.ArgumentParser:
     build.add_argument("--input", type=Path, required=True)
     build.add_argument("--output", type=Path, required=True)
     build.add_argument("--embedding-model", default=DEFAULT_EMBED_MODEL)
+    build.add_argument(
+        "--embedding-path",
+        type=Path,
+        help="Local FastEmbed-compatible ONNX model folder; avoids any model download",
+    )
     build.add_argument("--chunk-chars", type=int, default=3500)
     build.add_argument("--overlap-chars", type=int, default=300)
     build.set_defaults(func=build_bundle)

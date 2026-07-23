@@ -92,6 +92,28 @@ crew member uses the IFS terms found in the documentation. Use it to validate
 the end-to-end Graph RAG pipeline on a restricted network; compare it with BGE
 embeddings later if company-approved model access becomes available.
 
+### Use a model downloaded manually
+
+This project uses FastEmbed's ONNX version of BGE, not the original PyTorch
+model files. From a browser on a machine that can access Hugging Face, download
+every file from the `Qdrant/bge-small-en-v1.5-onnx-q` repository into one local
+folder, then transfer that whole folder to the company laptop. Do not download
+only one `.onnx` file: the tokenizer and configuration files are also required.
+
+For example, if the transferred folder is `models/bge-small-en-v1.5-onnx-q/`:
+
+```bash
+python offline_graph_rag.py build \
+  --input data \
+  --output ifs_mobile_bundle \
+  --embedding-model BAAI/bge-small-en-v1.5 \
+  --embedding-path models/bge-small-en-v1.5-onnx-q
+```
+
+`--embedding-path` copies the model into `ifs_mobile_bundle/models/embeddings/`.
+The build and every later offline query use that copied local model, so they do
+not contact Hugging Face.
+
 ## 3. Query offline
 
 Evidence-only mode is the safest and smallest first mobile experience:

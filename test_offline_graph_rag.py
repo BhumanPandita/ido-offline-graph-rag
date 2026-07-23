@@ -21,6 +21,7 @@ from offline_graph_rag import (
     split_text,
     top_positions,
     visualize_bundle,
+    make_parser,
 )
 
 
@@ -87,6 +88,20 @@ class OfflineGraphRagTests(unittest.TestCase):
         self.assertEqual(matrix.shape, (2, 384))
         self.assertEqual(LOCAL_HASH_EMBED_MODEL, "local-hash-v1")
         self.assertFalse(np.array_equal(matrix[0], matrix[1]))
+
+    def test_build_accepts_a_manually_downloaded_embedding_folder(self):
+        args = make_parser().parse_args(
+            [
+                "build",
+                "--input",
+                "data",
+                "--output",
+                "bundle",
+                "--embedding-path",
+                "models/bge-small-en-v1.5-onnx-q",
+            ]
+        )
+        self.assertEqual(args.embedding_path, Path("models/bge-small-en-v1.5-onnx-q"))
 
     def test_azure_endpoint_normalization_matches_diagnostic_script(self):
         self.assertEqual(
