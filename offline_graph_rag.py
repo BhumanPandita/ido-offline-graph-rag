@@ -446,6 +446,11 @@ def build_bundle(args: argparse.Namespace) -> None:
         temp_dir = Path(temp_name)
         database_path = temp_dir / "graph.sqlite3"
         model_cache = temp_dir / "models" / "embeddings"
+        # Download the local embedding model before any paid Azure extraction.
+        # A corporate-network/Hugging Face failure should fail fast here.
+        print("Preparing the local embedding model...", flush=True)
+        embedder = get_embedder(args.embedding_model, model_cache, offline=False)
+
         connection = sqlite3.connect(database_path)
         initialize_database(connection)
         connection.executemany(
@@ -474,7 +479,6 @@ def build_bundle(args: argparse.Namespace) -> None:
         connection.close()
         del connection
 
-        embedder = get_embedder(args.embedding_model, model_cache, offline=False)
         embeddings = embed_texts(embedder, retrieval_texts)
         # FastEmbed/ONNX can keep model files open on Windows. Release it
         # before moving the directory into the final bundle.
