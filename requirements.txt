@@ -5,6 +5,7 @@ openai>=1.42,<3
 python-dotenv>=1.0,<2
 pydantic>=2.8,<3
 pypdf>=5,<7
+requests>=2.31,<3
 networkx>=3.2,<4
 plotly>=5.20,<7
 

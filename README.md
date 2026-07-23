@@ -31,6 +31,26 @@ The CLI loads `.env` automatically. Alternatively, export the four variables
 in Git Bash with `export NAME=value`. Do not commit `.env` or company
 documents; use your approved secret-management process for the values.
 
+## Azure connectivity test
+
+Before running a full graph build, test the Azure resource and deployment:
+
+```bash
+python test_azure_openai.py
+```
+
+The deployment value must be the custom deployment name shown in Azure, not
+necessarily the underlying model name such as `gpt-4o`. You can also pass the
+values explicitly:
+
+```bash
+python test_azure_openai.py \
+  --endpoint "https://your-resource.openai.azure.com/" \
+  --api-key "YOUR_KEY" \
+  --deployment "YOUR_DEPLOYMENT_NAME" \
+  --api-version "2024-10-21"
+```
+
 ## 2. Build the graph
 
 Put `.pdf`, `.txt`, or `.md` IFS documentation under `data/`, then run:
