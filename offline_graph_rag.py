@@ -15,6 +15,7 @@ Azure is imported and called only by the ``build`` command.
 from __future__ import annotations
 
 import argparse
+import gc
 import hashlib
 import html
 import json
@@ -419,8 +420,10 @@ def build_bundle(args: argparse.Namespace) -> None:
     extractor = AzureGraphExtractor()
     output_dir.parent.mkdir(parents=True, exist_ok=True)
 
+    # Keep build files outside locations such as Downloads that may be scanned
+    # or synchronized by Windows while SQLite is being finalized.
     with tempfile.TemporaryDirectory(
-        prefix=f".{output_dir.name}-", dir=output_dir.parent
+        prefix=f".{output_dir.name}-", ignore_cleanup_errors=True
     ) as temp_name:
         temp_dir = Path(temp_name)
         database_path = temp_dir / "graph.sqlite3"
@@ -449,16 +452,16 @@ def build_bundle(args: argparse.Namespace) -> None:
 
         retrieval_texts = create_retrieval_items(connection)
         connection.commit()
-        vacuum_cursor = connection.execute("VACUUM")
-        # Close the cursor explicitly before moving the temporary directory.
-        # Windows otherwise may keep graph.sqlite3 locked (WinError 32).
-        vacuum_cursor.close()
-        connection.commit()
+        # Close SQLite before moving the completed temporary directory.
         connection.close()
         del connection
 
         embedder = get_embedder(args.embedding_model, model_cache, offline=False)
         embeddings = embed_texts(embedder, retrieval_texts)
+        # FastEmbed/ONNX can keep model files open on Windows. Release it
+        # before moving the directory into the final bundle.
+        del embedder
+        gc.collect()
         np.save(temp_dir / "embeddings.npy", embeddings.astype(np.float16))
 
         manifest = {
