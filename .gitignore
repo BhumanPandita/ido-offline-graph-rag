@@ -1,0 +1,10 @@
+.DS_Store
+.env
+.venv/
+__pycache__/
+*.py[cod]
+
+# Company source material and generated mobile/model artifacts
+data/
+ifs_mobile_bundle/
+models/
