@@ -34,6 +34,7 @@ from pydantic import BaseModel, Field
 
 
 DEFAULT_EMBED_MODEL = "BAAI/bge-small-en-v1.5"
+LOCAL_HASH_EMBED_MODEL = "local-hash-v1"
 SUPPORTED_SUFFIXES = {".md", ".pdf", ".txt"}
 
 EntityType = Literal[
@@ -400,7 +401,27 @@ def create_retrieval_items(connection: sqlite3.Connection) -> list[str]:
     return [item[2] for item in items]
 
 
+class LocalHashEmbedder:
+    """Zero-download lexical embeddings for restricted/offline environments."""
+
+    dimensions = 384
+
+    def embed(self, texts: list[str]) -> Iterable[np.ndarray]:
+        for text in texts:
+            vector = np.zeros(self.dimensions, dtype=np.float32)
+            tokens = re.findall(r"[a-z0-9][a-z0-9_/-]*", text.casefold())
+            features = tokens + [f"{left} {right}" for left, right in zip(tokens, tokens[1:])]
+            for feature in features:
+                digest = hashlib.blake2b(feature.encode("utf-8"), digest_size=8).digest()
+                value = int.from_bytes(digest, byteorder="little")
+                index = value % self.dimensions
+                vector[index] += 1.0 if value & (1 << 63) else -1.0
+            yield vector
+
+
 def get_embedder(model_name: str, cache_dir: Path, offline: bool):
+    if model_name == LOCAL_HASH_EMBED_MODEL:
+        return LocalHashEmbedder()
     try:
         from fastembed import TextEmbedding
     except ImportError as exc:

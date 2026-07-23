@@ -10,6 +10,8 @@ from offline_graph_rag import (
     Chunk,
     ChunkExtraction,
     ExtractedRelation,
+    LOCAL_HASH_EMBED_MODEL,
+    LocalHashEmbedder,
     add_extraction,
     collect_context,
     initialize_database,
@@ -73,6 +75,18 @@ class OfflineGraphRagTests(unittest.TestCase):
         embeddings = np.asarray([[1.0, 0.0], [0.0, 1.0]], dtype=np.float16)
         query = np.asarray([0.9, 0.1], dtype=np.float32)
         self.assertEqual(top_positions(embeddings, query, top_k=1), [0])
+
+    def test_local_hash_embedder_needs_no_model_download(self):
+        matrix = np.asarray(
+            list(
+                LocalHashEmbedder().embed(
+                    ["Work order approval", "Aircraft maintenance"]
+                )
+            )
+        )
+        self.assertEqual(matrix.shape, (2, 384))
+        self.assertEqual(LOCAL_HASH_EMBED_MODEL, "local-hash-v1")
+        self.assertFalse(np.array_equal(matrix[0], matrix[1]))
 
     def test_azure_endpoint_normalization_matches_diagnostic_script(self):
         self.assertEqual(

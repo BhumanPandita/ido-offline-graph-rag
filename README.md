@@ -75,6 +75,23 @@ ifs_mobile_bundle/
   models/embeddings/
 ```
 
+### If Hugging Face downloads are blocked
+
+Use the built-in `local-hash-v1` embedding option. It downloads no model and
+adds no model files to the bundle:
+
+```bash
+python offline_graph_rag.py build \
+  --input data \
+  --output ifs_mobile_bundle \
+  --embedding-model local-hash-v1
+```
+
+This is a lexical matcher, not a semantic language model. It works best when a
+crew member uses the IFS terms found in the documentation. Use it to validate
+the end-to-end Graph RAG pipeline on a restricted network; compare it with BGE
+embeddings later if company-approved model access becomes available.
+
 ## 3. Query offline
 
 Evidence-only mode is the safest and smallest first mobile experience:
